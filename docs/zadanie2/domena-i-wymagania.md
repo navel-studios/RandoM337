@@ -1,9 +1,9 @@
 # Zadanie 2: Biznesowy opis domeny, persony, podróże użytkownika i wymagania
 
 ## 1. Opis domeny biznesowej
-Domena biznesowa aplikacji RandoM337 to internetowa komunikacja wideo w czasie rzeczywistym i rozrywka społecznościowa (tzw. chat roulette). Odbiorcami oprogramowania są użytkownicy sieci poszukujący szybkich, niezobowiązujących i anonimowych interakcji z nowymi osobami z całego świata. 
+Cel aplikacji RandoM337 to internetowa komunikacja wideo w czasie rzeczywistym i rozrywka społecznościowa (tzw. chat roulette). Odbiorcami oprogramowania są użytkownicy sieci poszukujący szybkich, niezobowiązujących i anonimowych interakcji z nowymi osobami z całego świata. 
 
-Obecnie użytkownicy platform takich jak Omegle czy Emerald Chat często zmagają się z problemem trudności w nawiązaniu rozmowy lub brakiem wspólnych tematów, co kończy się szybkim rozłączeniem. RandoM337 wprowadza warstwę grywalizacji. System narzuca losowe wyzwania tematyczne, które zmuszają uczestników do zaangażowania i budują natychmiastowy kontekst do rozmowy, ułatwiając przełamanie pierwszych lodów. Użytkownicy, którzy nie chcą lub nie mogą podjąć wyzwania, są dyskwalifikowani (rozłączani), co naturalnie filtruje społeczność.
+Obecnie użytkownicy platform często zmagają się z problemem trudności w nawiązaniu rozmowy lub brakiem wspólnych tematów, co kończy się szybkim rozłączeniem. RandoM337 wprowadza warstwę grywalizacji. System narzuca losowe wyzwania tematyczne, które zmuszają uczestników do zaangażowania i budują natychmiastowy kontekst do rozmowy, ułatwiając przełamanie pierwszych lodów. Użytkownicy, którzy nie chcą lub nie mogą podjąć wyzwania, są dyskwalifikowani (rozłączani), co naturalnie filtruje społeczność.
 
 ---
 
