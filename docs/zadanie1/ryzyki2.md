@@ -1,0 +1,13 @@
+# Tabela Ryzyk Projektowych
+
+| ID | Opis | Zadanie | Wiarygodność (1-5) | Konsekwencje (1-5) | Działanie łagodzące |
+|:---|:---|:---:|:---:|:---:|:---|
+| **R1** | [cite_start]Słabe zrozumienie domeny biznesowej, brak jej zainteresowania [cite: 35] | [cite_start]8 [cite: 35] | [cite_start]3 (Medium) [cite: 35] | [cite_start]4 (High) [cite: 35] | [cite_start]Analiza feedback'u, restrukturyzacja celów w zadaniach 2-3, ewentualne przerobienie pewnych funkcjonalności [cite: 35] |
+| **R2** | [cite_start]Błędne/słabe testy jednostkowe, ukryte bugi/wrażliwości [cite: 35] | [cite_start]7 [cite: 35] | [cite_start]4 (High) [cite: 35] | [cite_start]3 (Medium) [cite: 35] | [cite_start]Zwracanie większej uwagi na zadania 2-4 [cite: 35] |
+| **R3** | [cite_start]Nieprzewidziane nakłady czasu, przekrócenie deadline'ow implementacji [cite: 35] | [cite_start]6 [cite: 35] | [cite_start]2 (Low) [cite: 35] | [cite_start]4 (High) [cite: 35] | [cite_start]Zwracanie większej uwagi na wzorce projektowe, diagramy itp, estymacja pracy [cite: 35] |
+| **R4** | [cite_start]Nic nie działa [cite: 37] | [cite_start]6 [cite: 37] | [cite_start]4 (High) [cite: 37] | [cite_start]2 (Low) [cite: 37] | [cite_start]Izolacja poszczególnych problemów, napisanie testów jednostkowych pod każdy, debugowanie [cite: 37] |
+| **R5** | [cite_start]Desynchronizacja sesji w real-time [cite: 37] | [cite_start]7 [cite: 37] | [cite_start]3 (Medium) [cite: 37] | [cite_start]3 (Medium) [cite: 37] | [cite_start]Beta-testing + testy jednostkowe + debugowanie [cite: 37] |
+| **R6** | [cite_start]Cross-Site Scripting Vulnerability (XSS) [cite: 37] | [cite_start]8 [cite: 37] | [cite_start]2 (Low) [cite: 37] | [cite_start]4 (High) [cite: 37] | [cite_start]Właściwe enkapsulowanie pół tekstowych [cite: 37] |
+| **R7** | [cite_start]Nieintuicyjny/bugujący/wolny interfejs [cite: 39] | [cite_start]8 [cite: 39] | [cite_start]3 (Medium) [cite: 39] | [cite_start]2 (Low) [cite: 39] | [cite_start]Slow & Steady... [cite: 39] |
+| **R8** | [cite_start]Niedopuszczalny kontent [cite: 39] | [cite_start]8 [cite: 39] | [cite_start]4 (High) [cite: 39] | [cite_start]4 (High) [cite: 39] | [cite_start]Weryfikacja, moderacja [cite: 39] |
+| **R9** | [cite_start]Brak mocy obliczeniowej serwerów [cite: 39] | [cite_start]8 [cite: 39] | [cite_start]2 (Low) [cite: 39] | [cite_start]2 (Low) [cite: 39] | [cite_start]Istnieje wiele popularnych rozwiązań, zarówno web a fizycznych [cite: 39] |
