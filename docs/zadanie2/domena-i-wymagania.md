@@ -42,7 +42,7 @@ Obecnie użytkownicy platform takich jak Omegle czy Emerald Chat często zmagaj�
 * **Doświadczenie:** Inżynier DevOps, zna się na utrzymaniu serwerów i optymalizacji aplikacji webowych. 
 * **Cele:** Utrzymanie stabilności serwerów przy rosnącym ruchu, zapewnienie płynnej synchronizacji sesji w czasie rzeczywistym.
 * **Preferencje:** Dostęp do metryk serwera, łatwe dodawanie nowych wyzwań do bazy.
-* **Frustracje:** Brak mocy obliczeniowej serwerów w godzinach szczytu, ataki Cross-Site Scripting (XSS), trudności w namierzeniu desynchronizacji.
+* **Frustracje:** Częste awarie systemu, raporty użytkonikow.
 * **Zadania w systemie:** Zarządzanie pulą wyzwań, nadawanie uprawnień moderatorom, dbanie o moc obliczeniową serwerów.
 
 ---
@@ -69,7 +69,7 @@ Obecnie użytkownicy platform takich jak Omegle czy Emerald Chat często zmagaj�
 ### 4.4.1 Ograniczenia
 * **CON-01:** Aplikacja musi działać jako aplikacja webowa w przeglądarce.
 * **CON-02:** Użytkownik musi posiadać i udostępnić sprawną kamerę oraz mikrofon.
-* **CON-03:** Konieczność ochrony przed wstrzykiwaniem złośliwego kodu (Vulnerability XSS).
+* **CON-03:** Konieczność ochrony przed wstrzykiwaniem złośliwego kodu.
 
 ### 4.4.2 Wymagania systemowe
 * **SYS-01:** System wymaga architektury pozwalającej na poprawną synchronizację sesji w czasie rzeczywistym.
