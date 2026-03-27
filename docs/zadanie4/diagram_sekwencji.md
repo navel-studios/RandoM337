@@ -1,3 +1,4 @@
+```mermaid
 sequenceDiagram
     autonumber
     actor ClientA as User A Frontend
