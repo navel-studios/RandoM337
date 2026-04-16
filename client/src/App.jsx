@@ -15,6 +15,7 @@ export default function App() {
     const [roomId, setRoomId] = useState(null);
     const [challenge, setChallenge] = useState(null);
     const [error, setError] = useState(null);
+    const [audioBlocked, setAudioBlocked] = useState(false);
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
@@ -23,6 +24,7 @@ export default function App() {
     const { startCall, handleOffer, handleAnswer, handleIceCandidate, cleanup } = useWebRTC({
         localVideoRef,
         remoteVideoRef,
+        onAudioBlocked: setAudioBlocked,
     });
 
     // ── Re-attach local stream whenever the video element is remounted ────────
@@ -104,6 +106,7 @@ export default function App() {
         const onMatchFound = async ({ roomId: rid, challenge: ch, isInitiator }) => {
             setRoomId(rid);
             setChallenge(ch);
+            setAudioBlocked(false);
             setState(STATES.IN_CALL);
             // startLocalStream is idempotent — returns cached stream if already running
             const stream = localStreamRef.current || await startLocalStream();
@@ -188,6 +191,12 @@ export default function App() {
                         )}
 
                         <div className="call-controls">
+                            {audioBlocked && (
+                                <button className="btn btn-secondary" onClick={() => {
+                                    remoteVideoRef.current?.play();
+                                    setAudioBlocked(false);
+                                }}>Unmute partner</button>
+                            )}
                             <button className="btn btn-danger" onClick={skip}>Skip</button>
                         </div>
                     </div>
