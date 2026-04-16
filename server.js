@@ -46,27 +46,29 @@ matchmakerService.emitToUser = (userId, event, data) => {
 // Set METERED_APP_NAME and METERED_API_KEY as Railway env vars.
 // Falls back to STUN-only if not configured (same-device testing still works).
 
-app.get('/api/ice-servers', async (_req, res) => {
-    const appName = process.env.METERED_APP_NAME;
-    const apiKey  = process.env.METERED_API_KEY;
+app.get('/api/ice-servers', (_req, res) => {
+    const username   = process.env.METERED_USERNAME;
+    const credential = process.env.METERED_CREDENTIAL;
 
-    if (!appName || !apiKey) {
-        return res.json([
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-        ]);
+    const stun = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun.relay.metered.ca:80' },
+    ];
+
+    if (!username || !credential) {
+        console.warn('[TURN] METERED_USERNAME/CREDENTIAL not set — returning STUN only');
+        return res.json(stun);
     }
 
-    try {
-        const url = `https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Metered API ${response.status}`);
-        const iceServers = await response.json();
-        res.json(iceServers);
-    } catch (err) {
-        console.error('[TURN] Failed to fetch credentials:', err.message);
-        res.status(500).json({ error: 'Could not fetch TURN credentials' });
-    }
+    const turn = [
+        { urls: 'turn:global.relay.metered.ca:80',                   username, credential },
+        { urls: 'turn:global.relay.metered.ca:80?transport=tcp',      username, credential },
+        { urls: 'turn:global.relay.metered.ca:443',                   username, credential },
+        { urls: 'turns:global.relay.metered.ca:443?transport=tcp',    username, credential },
+    ];
+
+    res.json([...stun, ...turn]);
 });
 
 // ─── Static serving (production only) ────────────────────────────────────────
