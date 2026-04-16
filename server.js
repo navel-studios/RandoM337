@@ -97,25 +97,33 @@ io.on('connection', (socket) => {
     // ── WebRTC Signaling ────────────────────────────────────────────────────
 
     socket.on('webrtc_offer', async ({ roomId, payload }) => {
+        console.log(`[offer]  from=${userId.slice(0,8)} room=${roomId}`);
         try {
             await signalingService.relayOffer(userId, roomId, payload);
+            console.log(`[offer]  relayed OK`);
         } catch (err) {
+            console.error(`[offer]  ERROR: ${err.message}`);
             socket.emit('error', { message: err.message });
         }
     });
 
     socket.on('webrtc_answer', async ({ roomId, payload }) => {
+        console.log(`[answer] from=${userId.slice(0,8)} room=${roomId}`);
         try {
             await signalingService.relayAnswer(userId, roomId, payload);
+            console.log(`[answer] relayed OK`);
         } catch (err) {
+            console.error(`[answer] ERROR: ${err.message}`);
             socket.emit('error', { message: err.message });
         }
     });
 
     socket.on('webrtc_ice_candidate', async ({ roomId, payload }) => {
+        console.log(`[ice]    from=${userId.slice(0,8)} room=${roomId}`);
         try {
             await signalingService.relayIceCandidate(userId, roomId, payload);
         } catch (err) {
+            console.error(`[ice]    ERROR: ${err.message}`);
             socket.emit('error', { message: err.message });
         }
     });

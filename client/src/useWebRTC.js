@@ -5,9 +5,15 @@ const RTC_CONFIG = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+        {
+            urls: [
+                'turn:openrelay.metered.ca:80',
+                'turn:openrelay.metered.ca:443',
+                'turn:openrelay.metered.ca:443?transport=tcp',
+            ],
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
     ],
 };
 
@@ -16,7 +22,6 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
     const roomIdRef = useRef(null);
     // ICE candidates that arrived before setRemoteDescription was called
     const pendingCandidatesRef = useRef([]);
-    const isRemoteDescSettledRef = useRef(false);
 
     const cleanup = useCallback(() => {
         if (pcRef.current) {
@@ -28,21 +33,22 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
         }
         roomIdRef.current = null;
         pendingCandidatesRef.current = [];
-        isRemoteDescSettledRef.current = false;
     }, [remoteVideoRef]);
 
     // Flush any ICE candidates that arrived before setRemoteDescription
     const flushPendingCandidates = useCallback(async () => {
         const pc = pcRef.current;
         if (!pc) return;
-        for (const candidate of pendingCandidatesRef.current) {
+        const pending = pendingCandidatesRef.current;
+        pendingCandidatesRef.current = [];
+        console.log('[ICE] flushing', pending.length, 'buffered candidates');
+        for (const candidate of pending) {
             try {
                 await pc.addIceCandidate(new RTCIceCandidate(candidate));
             } catch (e) {
-                console.warn('ICE flush error:', e);
+                console.warn('[ICE] flush error:', e);
             }
         }
-        pendingCandidatesRef.current = [];
     }, []);
 
     const startCall = useCallback(async (roomId, isInitiator, localStream) => {
@@ -64,13 +70,16 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
 
         pc.onicecandidate = (event) => {
             if (event.candidate) {
-                socket.emit('webrtc_ice_candidate', { roomId, payload: event.candidate.toJSON() });
+                console.log('[ICE] sending candidate type=' + event.candidate.type, event.candidate.protocol, event.candidate.address);
+                socket.emit('webrtc_ice_candidate', { roomId, payload: event.candidate });
+            } else {
+                console.log('[ICE] gathering complete (null candidate)');
             }
         };
 
         pc.oniceconnectionstatechange = () => {
             const s = pc.iceConnectionState;
-            console.log('[ICE]', s);
+            console.log('[ICE state]', s);
             if (onIceState) onIceState(s);
         };
 
@@ -78,49 +87,58 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
             console.log('[ICE gathering]', pc.iceGatheringState);
         };
 
+        pc.onconnectionstatechange = () => {
+            console.log('[peer connection]', pc.connectionState);
+        };
+
         if (isInitiator) {
+            console.log('[WebRTC] creating offer as initiator');
             const offer = await pc.createOffer({
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: true,
             });
             await pc.setLocalDescription(offer);
+            console.log('[WebRTC] offer sent');
             socket.emit('webrtc_offer', { roomId, payload: offer });
+        } else {
+            console.log('[WebRTC] waiting for offer as non-initiator');
         }
     }, [cleanup, remoteVideoRef, onAudioBlocked]);
 
     const handleOffer = useCallback(async (offer) => {
         const pc = pcRef.current;
-        if (!pc) return;
+        if (!pc) { console.error('[WebRTC] handleOffer: no peer connection'); return; }
+        console.log('[WebRTC] received offer, setting remote description');
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        // Remote description is now strictly settled
-        isRemoteDescSettledRef.current = true;
         await flushPendingCandidates();
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
+        console.log('[WebRTC] answer sent');
         socket.emit('webrtc_answer', { roomId: roomIdRef.current, payload: answer });
     }, [flushPendingCandidates]);
 
     const handleAnswer = useCallback(async (answer) => {
         const pc = pcRef.current;
-        if (!pc) return;
+        if (!pc) { console.error('[WebRTC] handleAnswer: no peer connection'); return; }
+        console.log('[WebRTC] received answer, setting remote description');
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        // Remote description is now strictly settled
-        isRemoteDescSettledRef.current = true;
         await flushPendingCandidates();
+        console.log('[WebRTC] flushed', pendingCandidatesRef.current.length, 'buffered candidates');
     }, [flushPendingCandidates]);
 
     const handleIceCandidate = useCallback(async (candidate) => {
         const pc = pcRef.current;
-        if (!pc) return;
-        if (!isRemoteDescSettledRef.current) {
-            // Buffer until remote completely settled
+        if (!pc) { console.warn('[ICE] received candidate but no peer connection'); return; }
+        if (!pc.remoteDescription) {
+            console.log('[ICE] buffering candidate (no remote desc yet), total=', pendingCandidatesRef.current.length + 1);
             pendingCandidatesRef.current.push(candidate);
             return;
         }
         try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('[ICE] applied candidate immediately');
         } catch (e) {
-            console.warn('ICE candidate error:', e);
+            console.warn('[ICE] addIceCandidate error:', e);
         }
     }, []);
 
