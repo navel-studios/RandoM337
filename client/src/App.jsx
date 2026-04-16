@@ -41,7 +41,12 @@ export default function App() {
 
     const startLocalStream = useCallback(async () => {
         if (localStreamRef.current) return localStreamRef.current;
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        // Use ideal constraints so Firefox can fall back gracefully
+        // rather than throwing if exact constraints can't be met
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: { echoCancellation: true, noiseSuppression: true },
+        });
         localStreamRef.current = stream;
         if (localVideoRef.current) {
             localVideoRef.current.srcObject = stream;
@@ -77,8 +82,17 @@ export default function App() {
         setError(null);
         try {
             await startLocalStream();
-        } catch {
-            setError('Camera/microphone access denied. Please allow it and try again.');
+        } catch (err) {
+            const name = err?.name || '';
+            if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+                setError('Camera/microphone access denied. Please allow it in your browser and try again.');
+            } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+                setError('No camera or microphone found on this device.');
+            } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+                setError('Camera or microphone is already in use by another app.');
+            } else {
+                setError(`Could not access camera/microphone: ${err?.message || err}`);
+            }
             return;
         }
         socket.emit('join_queue', {});
