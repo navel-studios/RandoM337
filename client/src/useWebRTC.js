@@ -5,8 +5,6 @@ const RTC_CONFIG = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        // Free TURN relay — handles peers behind strict/symmetric NAT
-        // (direct P2P fails across most real-world networks without this)
         {
             urls: [
                 'turn:openrelay.metered.ca:80',
@@ -22,6 +20,8 @@ const RTC_CONFIG = {
 export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked }) {
     const pcRef = useRef(null);
     const roomIdRef = useRef(null);
+    // ICE candidates that arrived before setRemoteDescription was called
+    const pendingCandidatesRef = useRef([]);
 
     const cleanup = useCallback(() => {
         if (pcRef.current) {
@@ -32,13 +32,23 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked }) {
             remoteVideoRef.current.srcObject = null;
         }
         roomIdRef.current = null;
+        pendingCandidatesRef.current = [];
     }, [remoteVideoRef]);
 
-    /**
-     * Create the peer connection and add local tracks.
-     * If isInitiator, also create and send the offer.
-     * If not initiator, just waits — offer will arrive via socket.
-     */
+    // Flush any ICE candidates that arrived before setRemoteDescription
+    const flushPendingCandidates = useCallback(async () => {
+        const pc = pcRef.current;
+        if (!pc) return;
+        for (const candidate of pendingCandidatesRef.current) {
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+                console.warn('ICE flush error:', e);
+            }
+        }
+        pendingCandidatesRef.current = [];
+    }, []);
+
     const startCall = useCallback(async (roomId, isInitiator, localStream) => {
         cleanup();
         roomIdRef.current = roomId;
@@ -46,22 +56,16 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked }) {
         const pc = new RTCPeerConnection(RTC_CONFIG);
         pcRef.current = pc;
 
-        // Add local tracks so the remote side gets our stream
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-        // Display remote stream when tracks arrive.
-        // Calling play() explicitly bypasses browser autoplay-with-sound restrictions
-        // that silently suppress audio when srcObject is set from an async callback.
         pc.ontrack = (event) => {
             if (!remoteVideoRef.current || !event.streams[0]) return;
             remoteVideoRef.current.srcObject = event.streams[0];
             remoteVideoRef.current.play().catch(() => {
-                // Autoplay still blocked — surface the manual unmute button
                 if (onAudioBlocked) onAudioBlocked(true);
             });
         };
 
-        // Forward ICE candidates to the server
         pc.onicecandidate = (event) => {
             if (event.candidate) {
                 socket.emit('webrtc_ice_candidate', { roomId, payload: event.candidate });
@@ -73,31 +77,35 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked }) {
             await pc.setLocalDescription(offer);
             socket.emit('webrtc_offer', { roomId, payload: offer });
         }
-        // Non-initiator: tracks are already added; just waits for the offer event
-    }, [cleanup, remoteVideoRef]);
+    }, [cleanup, remoteVideoRef, onAudioBlocked]);
 
-    /**
-     * Called when a webrtc_offer arrives.
-     * Tracks were already added in startCall — do NOT add them again.
-     */
     const handleOffer = useCallback(async (offer) => {
         const pc = pcRef.current;
         if (!pc) return;
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        // Remote description is now set — safe to apply buffered candidates
+        await flushPendingCandidates();
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('webrtc_answer', { roomId: roomIdRef.current, payload: answer });
-    }, []);
+    }, [flushPendingCandidates]);
 
     const handleAnswer = useCallback(async (answer) => {
         const pc = pcRef.current;
         if (!pc) return;
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
-    }, []);
+        // Remote description is now set — safe to apply buffered candidates
+        await flushPendingCandidates();
+    }, [flushPendingCandidates]);
 
     const handleIceCandidate = useCallback(async (candidate) => {
         const pc = pcRef.current;
         if (!pc) return;
+        if (!pc.remoteDescription) {
+            // Too early — buffer until handleOffer/handleAnswer calls flushPendingCandidates
+            pendingCandidatesRef.current.push(candidate);
+            return;
+        }
         try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (e) {
