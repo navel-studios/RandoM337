@@ -1,29 +1,16 @@
 import { useRef, useCallback } from 'react';
 import { socket } from './socket';
 
-const ICE_SERVERS = [
-    { urls: 'stun:stun.relay.metered.ca:80' },
-    {
-        urls: 'turn:global.relay.metered.ca:80',
-        username: 'db35398d58c338b20c811fcd',
-        credential: '3JE+pTC4CvGd1HbB',
-    },
-    {
-        urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-        username: 'db35398d58c338b20c811fcd',
-        credential: '3JE+pTC4CvGd1HbB',
-    },
-    {
-        urls: 'turn:global.relay.metered.ca:443',
-        username: 'db35398d58c338b20c811fcd',
-        credential: '3JE+pTC4CvGd1HbB',
-    },
-    {
-        urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-        username: 'db35398d58c338b20c811fcd',
-        credential: '3JE+pTC4CvGd1HbB',
-    },
-];
+async function fetchIceServers() {
+    try {
+        const res = await fetch('/api/ice-servers');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+    } catch (err) {
+        console.warn('[ICE] failed to fetch servers, falling back to STUN only:', err.message);
+        return [{ urls: 'stun:stun.l.google.com:19302' }];
+    }
+}
 
 export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIceState }) {
     const pcRef = useRef(null);
@@ -63,7 +50,9 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
         cleanup();
         roomIdRef.current = roomId;
 
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        const iceServers = await fetchIceServers();
+        console.log('[ICE] using servers:', iceServers.map(s => s.urls).flat());
+        const pc = new RTCPeerConnection({ iceServers });
         pcRef.current = pc;
 
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
