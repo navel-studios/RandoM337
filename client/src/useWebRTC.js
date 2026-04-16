@@ -39,14 +39,16 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
     const flushPendingCandidates = useCallback(async () => {
         const pc = pcRef.current;
         if (!pc) return;
-        for (const candidate of pendingCandidatesRef.current) {
+        const pending = pendingCandidatesRef.current;
+        pendingCandidatesRef.current = [];
+        console.log('[ICE] flushing', pending.length, 'buffered candidates');
+        for (const candidate of pending) {
             try {
                 await pc.addIceCandidate(new RTCIceCandidate(candidate));
             } catch (e) {
-                console.warn('ICE flush error:', e);
+                console.warn('[ICE] flush error:', e);
             }
         }
-        pendingCandidatesRef.current = [];
     }, []);
 
     const startCall = useCallback(async (roomId, isInitiator, localStream) => {
@@ -68,13 +70,16 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
 
         pc.onicecandidate = (event) => {
             if (event.candidate) {
+                console.log('[ICE] sending candidate type=' + event.candidate.type, event.candidate.protocol, event.candidate.address);
                 socket.emit('webrtc_ice_candidate', { roomId, payload: event.candidate });
+            } else {
+                console.log('[ICE] gathering complete (null candidate)');
             }
         };
 
         pc.oniceconnectionstatechange = () => {
             const s = pc.iceConnectionState;
-            console.log('[ICE]', s);
+            console.log('[ICE state]', s);
             if (onIceState) onIceState(s);
         };
 
@@ -82,47 +87,58 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
             console.log('[ICE gathering]', pc.iceGatheringState);
         };
 
+        pc.onconnectionstatechange = () => {
+            console.log('[peer connection]', pc.connectionState);
+        };
+
         if (isInitiator) {
+            console.log('[WebRTC] creating offer as initiator');
             const offer = await pc.createOffer({
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: true,
             });
             await pc.setLocalDescription(offer);
+            console.log('[WebRTC] offer sent');
             socket.emit('webrtc_offer', { roomId, payload: offer });
+        } else {
+            console.log('[WebRTC] waiting for offer as non-initiator');
         }
     }, [cleanup, remoteVideoRef, onAudioBlocked]);
 
     const handleOffer = useCallback(async (offer) => {
         const pc = pcRef.current;
-        if (!pc) return;
+        if (!pc) { console.error('[WebRTC] handleOffer: no peer connection'); return; }
+        console.log('[WebRTC] received offer, setting remote description');
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        // Remote description is now set — safe to apply buffered candidates
         await flushPendingCandidates();
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
+        console.log('[WebRTC] answer sent');
         socket.emit('webrtc_answer', { roomId: roomIdRef.current, payload: answer });
     }, [flushPendingCandidates]);
 
     const handleAnswer = useCallback(async (answer) => {
         const pc = pcRef.current;
-        if (!pc) return;
+        if (!pc) { console.error('[WebRTC] handleAnswer: no peer connection'); return; }
+        console.log('[WebRTC] received answer, setting remote description');
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        // Remote description is now set — safe to apply buffered candidates
         await flushPendingCandidates();
+        console.log('[WebRTC] flushed', pendingCandidatesRef.current.length, 'buffered candidates');
     }, [flushPendingCandidates]);
 
     const handleIceCandidate = useCallback(async (candidate) => {
         const pc = pcRef.current;
-        if (!pc) return;
+        if (!pc) { console.warn('[ICE] received candidate but no peer connection'); return; }
         if (!pc.remoteDescription) {
-            // Too early — buffer until handleOffer/handleAnswer calls flushPendingCandidates
+            console.log('[ICE] buffering candidate (no remote desc yet), total=', pendingCandidatesRef.current.length + 1);
             pendingCandidatesRef.current.push(candidate);
             return;
         }
         try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('[ICE] applied candidate immediately');
         } catch (e) {
-            console.warn('ICE candidate error:', e);
+            console.warn('[ICE] addIceCandidate error:', e);
         }
     }, []);
 
