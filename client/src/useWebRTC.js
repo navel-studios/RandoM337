@@ -17,7 +17,7 @@ const RTC_CONFIG = {
     ],
 };
 
-export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked }) {
+export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIceState }) {
     const pcRef = useRef(null);
     const roomIdRef = useRef(null);
     // ICE candidates that arrived before setRemoteDescription was called
@@ -70,6 +70,16 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked }) {
             if (event.candidate) {
                 socket.emit('webrtc_ice_candidate', { roomId, payload: event.candidate });
             }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+            const s = pc.iceConnectionState;
+            console.log('[ICE]', s);
+            if (onIceState) onIceState(s);
+        };
+
+        pc.onicegatheringstatechange = () => {
+            console.log('[ICE gathering]', pc.iceGatheringState);
         };
 
         if (isInitiator) {

@@ -16,6 +16,7 @@ export default function App() {
     const [challenge, setChallenge] = useState(null);
     const [error, setError] = useState(null);
     const [audioBlocked, setAudioBlocked] = useState(false);
+    const [iceState, setIceState] = useState(null);
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
@@ -25,6 +26,7 @@ export default function App() {
         localVideoRef,
         remoteVideoRef,
         onAudioBlocked: setAudioBlocked,
+        onIceState: setIceState,
     });
 
     // ── Re-attach local stream whenever the video element is remounted ────────
@@ -107,6 +109,7 @@ export default function App() {
             setRoomId(rid);
             setChallenge(ch);
             setAudioBlocked(false);
+            setIceState(null);
             setState(STATES.IN_CALL);
             // startLocalStream is idempotent — returns cached stream if already running
             const stream = localStreamRef.current || await startLocalStream();
@@ -187,6 +190,12 @@ export default function App() {
                             <div className="challenge-box">
                                 <span className="challenge-label">Challenge</span>
                                 <p>{challenge.text}</p>
+                            </div>
+                        )}
+
+                        {iceState && iceState !== 'connected' && iceState !== 'completed' && (
+                            <div className={`ice-badge ice-${iceState}`}>
+                                ICE: {iceState}
                             </div>
                         )}
 
