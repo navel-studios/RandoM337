@@ -23,6 +23,11 @@ export function useWebRTC({ localVideoRef, remoteVideoRef }) {
         roomIdRef.current = null;
     }, [remoteVideoRef]);
 
+    /**
+     * Create the peer connection and add local tracks.
+     * If isInitiator, also create and send the offer.
+     * If not initiator, just waits — offer will arrive via socket.
+     */
     const startCall = useCallback(async (roomId, isInitiator, localStream) => {
         cleanup();
         roomIdRef.current = roomId;
@@ -30,17 +35,17 @@ export function useWebRTC({ localVideoRef, remoteVideoRef }) {
         const pc = new RTCPeerConnection(RTC_CONFIG);
         pcRef.current = pc;
 
-        // Push local tracks into the connection
+        // Add local tracks so the remote side gets our stream
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-        // When we get remote tracks, show them
+        // Display remote stream when tracks arrive
         pc.ontrack = (event) => {
             if (remoteVideoRef.current) {
                 remoteVideoRef.current.srcObject = event.streams[0];
             }
         };
 
-        // Send ICE candidates to the server to relay to partner
+        // Forward ICE candidates to the server
         pc.onicecandidate = (event) => {
             if (event.candidate) {
                 socket.emit('webrtc_ice_candidate', { roomId, payload: event.candidate });
@@ -52,12 +57,16 @@ export function useWebRTC({ localVideoRef, remoteVideoRef }) {
             await pc.setLocalDescription(offer);
             socket.emit('webrtc_offer', { roomId, payload: offer });
         }
+        // Non-initiator: tracks are already added; just waits for the offer event
     }, [cleanup, remoteVideoRef]);
 
-    const handleOffer = useCallback(async (offer, localStream) => {
+    /**
+     * Called when a webrtc_offer arrives.
+     * Tracks were already added in startCall — do NOT add them again.
+     */
+    const handleOffer = useCallback(async (offer) => {
         const pc = pcRef.current;
         if (!pc) return;
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);

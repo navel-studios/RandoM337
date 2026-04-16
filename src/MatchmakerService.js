@@ -47,8 +47,9 @@ class MatchmakerService {
         await this.poolManager.removePlayer(currentUser.userId);
         await this.poolManager.removePlayer(opponent.userId);
 
-        this.emitToUser(currentUser.userId, 'match_found', { roomId: room.roomId, challenge });
-        this.emitToUser(opponent.userId, 'match_found', { roomId: room.roomId, challenge });
+        // peerA (currentUser) drives the WebRTC offer; peerB waits for it
+        this.emitToUser(currentUser.userId, 'match_found', { roomId: room.roomId, challenge, isInitiator: true });
+        this.emitToUser(opponent.userId,   'match_found', { roomId: room.roomId, challenge, isInitiator: false });
     }
 
     /**

@@ -19,14 +19,21 @@ export default function App() {
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
     const localStreamRef = useRef(null);
-    const isInitiatorRef = useRef(false);
 
     const { startCall, handleOffer, handleAnswer, handleIceCandidate, cleanup } = useWebRTC({
         localVideoRef,
         remoteVideoRef,
     });
 
-    // ── Camera setup ──────────────────────────────────────────────────────────
+    // ── Re-attach local stream whenever the video element is remounted ────────
+    // React remounts <video> on state transitions, clearing srcObject.
+    useEffect(() => {
+        if (localStreamRef.current && localVideoRef.current) {
+            localVideoRef.current.srcObject = localStreamRef.current;
+        }
+    }, [state]);
+
+    // ── Camera helpers ────────────────────────────────────────────────────────
 
     const startLocalStream = useCallback(async () => {
         if (localStreamRef.current) return localStreamRef.current;
@@ -46,55 +53,10 @@ export default function App() {
         if (localVideoRef.current) localVideoRef.current.srcObject = null;
     }, []);
 
-    // ── Socket lifecycle ──────────────────────────────────────────────────────
-
-    useEffect(() => {
-        socket.connect();
-
-        socket.on('assigned_id', ({ userId: id }) => setUserId(id));
-
-        socket.on('queue_joined', () => setState(STATES.QUEUED));
-
-        socket.on('match_found', async ({ roomId: rid, challenge: ch }) => {
-            setRoomId(rid);
-            setChallenge(ch);
-            setState(STATES.IN_CALL);
-            const stream = localStreamRef.current || await startLocalStream();
-            await startCall(rid, isInitiatorRef.current, stream);
-        });
-
-        socket.on('webrtc_offer', async (offer) => {
-            isInitiatorRef.current = false;
-            const stream = localStreamRef.current || await startLocalStream();
-            await handleOffer(offer, stream);
-        });
-
-        socket.on('webrtc_answer', (answer) => handleAnswer(answer));
-
-        socket.on('webrtc_ice_candidate', (candidate) => handleIceCandidate(candidate));
-
-        socket.on('partner_disconnected', () => endCall('Your partner disconnected.'));
-        socket.on('partner_skipped', () => endCall('Your partner skipped.'));
-
-        socket.on('error', ({ message }) => setError(message));
-
-        return () => socket.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     // ── Actions ───────────────────────────────────────────────────────────────
 
-    const joinQueue = useCallback(async () => {
-        setError(null);
-        try {
-            await startLocalStream();
-        } catch {
-            setError('Camera/microphone access denied. Please allow it and try again.');
-            return;
-        }
-        isInitiatorRef.current = true;
-        socket.emit('join_queue', {});
-    }, [startLocalStream]);
+    // Use refs so socket handlers always call the latest version
+    const endCallRef = useRef(null);
 
     const endCall = useCallback((reason) => {
         cleanup();
@@ -104,6 +66,19 @@ export default function App() {
         setChallenge(null);
         if (reason) setError(reason);
     }, [cleanup, stopLocalStream]);
+
+    endCallRef.current = endCall;
+
+    const joinQueue = useCallback(async () => {
+        setError(null);
+        try {
+            await startLocalStream();
+        } catch {
+            setError('Camera/microphone access denied. Please allow it and try again.');
+            return;
+        }
+        socket.emit('join_queue', {});
+    }, [startLocalStream]);
 
     const skip = useCallback(() => {
         if (roomId) socket.emit('skip', { roomId });
@@ -115,6 +90,64 @@ export default function App() {
         stopLocalStream();
         setState(STATES.IDLE);
     }, [stopLocalStream]);
+
+    // ── Socket lifecycle ──────────────────────────────────────────────────────
+
+    useEffect(() => {
+        socket.connect();
+
+        const onAssignedId = ({ userId: id }) => setUserId(id);
+
+        const onQueueJoined = () => setState(STATES.QUEUED);
+
+        const onMatchFound = async ({ roomId: rid, challenge: ch, isInitiator }) => {
+            setRoomId(rid);
+            setChallenge(ch);
+            setState(STATES.IN_CALL);
+            // startLocalStream is idempotent — returns cached stream if already running
+            const stream = localStreamRef.current || await startLocalStream();
+            await startCall(rid, isInitiator, stream);
+        };
+
+        const onOffer = async (offer) => {
+            await handleOffer(offer);
+        };
+
+        const onAnswer = (answer) => handleAnswer(answer);
+
+        const onIce = (candidate) => handleIceCandidate(candidate);
+
+        const onPartnerDisconnected = () => endCallRef.current('Your partner disconnected.');
+        const onPartnerSkipped     = () => endCallRef.current('Your partner skipped.');
+
+        const onError = ({ message }) => setError(message);
+
+        socket.on('assigned_id',         onAssignedId);
+        socket.on('queue_joined',         onQueueJoined);
+        socket.on('match_found',          onMatchFound);
+        socket.on('webrtc_offer',         onOffer);
+        socket.on('webrtc_answer',        onAnswer);
+        socket.on('webrtc_ice_candidate', onIce);
+        socket.on('partner_disconnected', onPartnerDisconnected);
+        socket.on('partner_skipped',      onPartnerSkipped);
+        socket.on('error',                onError);
+
+        return () => {
+            // Remove specific handlers so StrictMode double-mount doesn't
+            // register duplicate listeners
+            socket.off('assigned_id',         onAssignedId);
+            socket.off('queue_joined',         onQueueJoined);
+            socket.off('match_found',          onMatchFound);
+            socket.off('webrtc_offer',         onOffer);
+            socket.off('webrtc_answer',        onAnswer);
+            socket.off('webrtc_ice_candidate', onIce);
+            socket.off('partner_disconnected', onPartnerDisconnected);
+            socket.off('partner_skipped',      onPartnerSkipped);
+            socket.off('error',                onError);
+            socket.disconnect();
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ── Render ────────────────────────────────────────────────────────────────
 
