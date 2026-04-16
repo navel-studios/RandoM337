@@ -83,7 +83,10 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
         };
 
         if (isInitiator) {
-            const offer = await pc.createOffer();
+            const offer = await pc.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true,
+            });
             await pc.setLocalDescription(offer);
             socket.emit('webrtc_offer', { roomId, payload: offer });
         }
