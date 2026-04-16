@@ -41,13 +41,22 @@ matchmakerService.emitToUser = (userId, event, data) => {
     if (conn) conn.sendEvent(event, data);
 };
 
-// ─── Static serving (production) ─────────────────────────────────────────────
+// ─── Static serving (production only) ────────────────────────────────────────
+// In development the Vite dev server (port 5173) serves the frontend.
+// Only serve the built dist/ folder when it actually exists.
 
 const clientDist = path.join(__dirname, 'client', 'dist');
-app.use(express.static(clientDist));
-app.get('*', (_req, res) => {
-    res.sendFile(path.join(clientDist, 'index.html'));
-});
+const fs = require('fs');
+if (fs.existsSync(clientDist)) {
+    app.use(express.static(clientDist));
+    app.get('*', (_req, res) => {
+        res.sendFile(path.join(clientDist, 'index.html'));
+    });
+} else {
+    app.get('/', (_req, res) => {
+        res.send('RandoM337 backend running. Start the Vite dev server (cd client && npm run dev) for the frontend.');
+    });
+}
 
 // ─── Socket.IO Events ─────────────────────────────────────────────────────────
 
