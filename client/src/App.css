@@ -258,3 +258,19 @@ body {
     display: flex;
     gap: 12px;
 }
+
+/* ── ICE state badge (debug) ─────────────────────────────────────────────── */
+.ice-badge {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+.ice-badge.ice-checking  { border-color: #f59e0b; color: #f59e0b; }
+.ice-badge.ice-failed    { border-color: var(--danger); color: var(--danger); }
+.ice-badge.ice-disconnected { border-color: #f59e0b; color: #f59e0b; }
