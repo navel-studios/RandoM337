@@ -1,4 +1,4 @@
-const MatchmakerService = require('./MatchmakerService');
+const MatchmakerService = require('../src/MatchmakerService');
 
 describe('MatchmakerService Lifecycle', () => {
     let matchmakerService;

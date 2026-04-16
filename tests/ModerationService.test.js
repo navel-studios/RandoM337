@@ -1,4 +1,4 @@
-const ModerationService = require('./ModerationService');
+const ModerationService = require('../src/ModerationService');
 
 describe('ModerationService', () => {
     let moderationService;

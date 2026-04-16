@@ -1,4 +1,4 @@
-const InMemoryPoolManager = require('./InMemoryPoolManager');
+const InMemoryPoolManager = require('../src/InMemoryPoolManager');
 
 describe('InMemoryPoolManager', () => {
     let poolManager;

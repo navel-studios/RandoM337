@@ -1,4 +1,4 @@
-const SignalingService = require('./SignalingService');
+const SignalingService = require('../src/SignalingService');
 
 describe('SignalingService', () => {
     let signalingService;
