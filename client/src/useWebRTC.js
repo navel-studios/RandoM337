@@ -5,15 +5,9 @@ const RTC_CONFIG = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        {
-            urls: [
-                'turn:openrelay.metered.ca:80',
-                'turn:openrelay.metered.ca:443',
-                'turn:openrelay.metered.ca:443?transport=tcp',
-            ],
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
-        },
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
     ],
 };
 
@@ -68,7 +62,12 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
 
         pc.onicecandidate = (event) => {
             if (event.candidate) {
-                socket.emit('webrtc_ice_candidate', { roomId, payload: event.candidate });
+                const candidateObj = {
+                    candidate: event.candidate.candidate,
+                    sdpMid: event.candidate.sdpMid,
+                    sdpMLineIndex: event.candidate.sdpMLineIndex,
+                };
+                socket.emit('webrtc_ice_candidate', { roomId, payload: candidateObj });
             }
         };
 
