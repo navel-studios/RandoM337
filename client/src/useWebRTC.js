@@ -1,21 +1,21 @@
 import { useRef, useCallback } from 'react';
 import { socket } from './socket';
 
-const RTC_CONFIG = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        {
-            urls: [
-                'turn:openrelay.metered.ca:80',
-                'turn:openrelay.metered.ca:443',
-                'turn:openrelay.metered.ca:443?transport=tcp',
-            ],
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
-        },
-    ],
-};
+async function fetchIceServers() {
+    try {
+        const res = await fetch('/api/ice-servers');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const servers = await res.json();
+        console.log('[ICE] servers from server:', servers.map(s => s.urls).flat());
+        return servers;
+    } catch (err) {
+        console.warn('[ICE] could not fetch TURN credentials, falling back to STUN only:', err.message);
+        return [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+        ];
+    }
+}
 
 export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIceState }) {
     const pcRef = useRef(null);
@@ -55,7 +55,8 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
         cleanup();
         roomIdRef.current = roomId;
 
-        const pc = new RTCPeerConnection(RTC_CONFIG);
+        const iceServers = await fetchIceServers();
+        const pc = new RTCPeerConnection({ iceServers });
         pcRef.current = pc;
 
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));

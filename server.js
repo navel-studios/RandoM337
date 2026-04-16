@@ -41,6 +41,34 @@ matchmakerService.emitToUser = (userId, event, data) => {
     if (conn) conn.sendEvent(event, data);
 };
 
+// ─── ICE server credentials endpoint ─────────────────────────────────────────
+// Fetches short-lived TURN credentials from Metered.ca.
+// Set METERED_APP_NAME and METERED_API_KEY as Railway env vars.
+// Falls back to STUN-only if not configured (same-device testing still works).
+
+app.get('/api/ice-servers', async (_req, res) => {
+    const appName = process.env.METERED_APP_NAME;
+    const apiKey  = process.env.METERED_API_KEY;
+
+    if (!appName || !apiKey) {
+        return res.json([
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+        ]);
+    }
+
+    try {
+        const url = `https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Metered API ${response.status}`);
+        const iceServers = await response.json();
+        res.json(iceServers);
+    } catch (err) {
+        console.error('[TURN] Failed to fetch credentials:', err.message);
+        res.status(500).json({ error: 'Could not fetch TURN credentials' });
+    }
+});
+
 // ─── Static serving (production only) ────────────────────────────────────────
 // In development the Vite dev server (port 5173) serves the frontend.
 // Only serve the built dist/ folder when it actually exists.
