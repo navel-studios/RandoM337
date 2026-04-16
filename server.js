@@ -73,8 +73,13 @@ io.on('connection', (socket) => {
     socket.on('join_queue', async (data) => {
         try {
             const preferences = (data && data.preferences) || {};
-            await matchmakerService.joinQueue(userId, preferences);
+            // Add to pool first so we can confirm queued...
+            await poolManager.addPlayer(userId, preferences);
+            // ...then confirm to the client BEFORE running processQueue.
+            // processQueue may immediately emit match_found; if queue_joined
+            // were sent after, it would overwrite the IN_CALL state on the client.
             socket.emit('queue_joined', {});
+            await matchmakerService.processQueue({ userId });
         } catch (err) {
             socket.emit('error', { message: err.message });
         }

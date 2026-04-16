@@ -98,7 +98,8 @@ export default function App() {
 
         const onAssignedId = ({ userId: id }) => setUserId(id);
 
-        const onQueueJoined = () => setState(STATES.QUEUED);
+        // Guard: never downgrade from IN_CALL (race between queue_joined and match_found)
+        const onQueueJoined = () => setState(prev => prev === STATES.IN_CALL ? prev : STATES.QUEUED);
 
         const onMatchFound = async ({ roomId: rid, challenge: ch, isInitiator }) => {
             setRoomId(rid);
