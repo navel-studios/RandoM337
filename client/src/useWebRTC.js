@@ -16,6 +16,7 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
     const roomIdRef = useRef(null);
     // ICE candidates that arrived before setRemoteDescription was called
     const pendingCandidatesRef = useRef([]);
+    const isRemoteDescSettledRef = useRef(false);
 
     const cleanup = useCallback(() => {
         if (pcRef.current) {
@@ -27,6 +28,7 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
         }
         roomIdRef.current = null;
         pendingCandidatesRef.current = [];
+        isRemoteDescSettledRef.current = false;
     }, [remoteVideoRef]);
 
     // Flush any ICE candidates that arrived before setRemoteDescription
@@ -62,12 +64,7 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
 
         pc.onicecandidate = (event) => {
             if (event.candidate) {
-                const candidateObj = {
-                    candidate: event.candidate.candidate,
-                    sdpMid: event.candidate.sdpMid,
-                    sdpMLineIndex: event.candidate.sdpMLineIndex,
-                };
-                socket.emit('webrtc_ice_candidate', { roomId, payload: candidateObj });
+                socket.emit('webrtc_ice_candidate', { roomId, payload: event.candidate.toJSON() });
             }
         };
 
@@ -92,7 +89,8 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
         const pc = pcRef.current;
         if (!pc) return;
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        // Remote description is now set — safe to apply buffered candidates
+        // Remote description is now strictly settled
+        isRemoteDescSettledRef.current = true;
         await flushPendingCandidates();
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -103,15 +101,16 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
         const pc = pcRef.current;
         if (!pc) return;
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        // Remote description is now set — safe to apply buffered candidates
+        // Remote description is now strictly settled
+        isRemoteDescSettledRef.current = true;
         await flushPendingCandidates();
     }, [flushPendingCandidates]);
 
     const handleIceCandidate = useCallback(async (candidate) => {
         const pc = pcRef.current;
         if (!pc) return;
-        if (!pc.remoteDescription) {
-            // Too early — buffer until handleOffer/handleAnswer calls flushPendingCandidates
+        if (!isRemoteDescSettledRef.current) {
+            // Buffer until remote completely settled
             pendingCandidatesRef.current.push(candidate);
             return;
         }
