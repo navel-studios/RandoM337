@@ -1,21 +1,29 @@
 import { useRef, useCallback } from 'react';
 import { socket } from './socket';
 
-async function fetchIceServers() {
-    try {
-        const res = await fetch('/api/ice-servers');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const servers = await res.json();
-        console.log('[ICE] servers from server:', servers.map(s => s.urls).flat());
-        return servers;
-    } catch (err) {
-        console.warn('[ICE] could not fetch TURN credentials, falling back to STUN only:', err.message);
-        return [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-        ];
-    }
-}
+const ICE_SERVERS = [
+    { urls: 'stun:stun.relay.metered.ca:80' },
+    {
+        urls: 'turn:global.relay.metered.ca:80',
+        username: 'db35398d58c338b20c811fcd',
+        credential: '3JE+pTC4CvGd1HbB',
+    },
+    {
+        urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+        username: 'db35398d58c338b20c811fcd',
+        credential: '3JE+pTC4CvGd1HbB',
+    },
+    {
+        urls: 'turn:global.relay.metered.ca:443',
+        username: 'db35398d58c338b20c811fcd',
+        credential: '3JE+pTC4CvGd1HbB',
+    },
+    {
+        urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+        username: 'db35398d58c338b20c811fcd',
+        credential: '3JE+pTC4CvGd1HbB',
+    },
+];
 
 export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIceState }) {
     const pcRef = useRef(null);
@@ -55,8 +63,7 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
         cleanup();
         roomIdRef.current = roomId;
 
-        const iceServers = await fetchIceServers();
-        const pc = new RTCPeerConnection({ iceServers });
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
         pcRef.current = pc;
 
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
