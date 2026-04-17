@@ -1,16 +1,48 @@
 import { useRef, useCallback } from 'react';
 import { socket } from './socket';
 
-async function fetchIceServers() {
-    try {
-        const res = await fetch('/api/ice-servers');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-    } catch (err) {
-        console.warn('[ICE] failed to fetch servers, falling back to STUN only:', err.message);
-        return [{ urls: 'stun:stun.l.google.com:19302' }];
-    }
-}
+// ICE server list — STUN for open/cone NAT, TURN relay for symmetric NAT.
+// Credentials are intentionally inline (university project, public repo).
+const ICE_SERVERS = [
+    // ── STUN servers (free, no credentials) ──────────────────────────────────
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.relay.metered.ca:80' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'stun:stun.stunprotocol.org:3478' },
+    { urls: 'stun:stun.ekiga.net' },
+    { urls: 'stun:stun.ideasip.com' },
+    { urls: 'stun:stun.schlund.de' },
+    { urls: 'stun:stun.voiparound.com' },
+    { urls: 'stun:stun.voipbuster.com' },
+    { urls: 'stun:stun.voipstunt.com' },
+    { urls: 'stun:stun.voxgratia.org' },
+    // ── TURN relay (Metered.ca) ───────────────────────────────────────────────
+    {
+        urls: 'turn:global.relay.metered.ca:80',
+        username: 'db35398d58c338b20c811fcd',
+        credential: '3JE+pTC4CvGd1HbB',
+    },
+    {
+        urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+        username: 'db35398d58c338b20c811fcd',
+        credential: '3JE+pTC4CvGd1HbB',
+    },
+    {
+        urls: 'turn:global.relay.metered.ca:443',
+        username: 'db35398d58c338b20c811fcd',
+        credential: '3JE+pTC4CvGd1HbB',
+    },
+    {
+        urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+        username: 'db35398d58c338b20c811fcd',
+        credential: '3JE+pTC4CvGd1HbB',
+    },
+];
 
 export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIceState }) {
     const pcRef = useRef(null);
@@ -50,9 +82,8 @@ export function useWebRTC({ localVideoRef, remoteVideoRef, onAudioBlocked, onIce
         cleanup();
         roomIdRef.current = roomId;
 
-        const iceServers = await fetchIceServers();
-        console.log('[ICE] using servers:', iceServers.map(s => s.urls).flat());
-        const pc = new RTCPeerConnection({ iceServers });
+        console.log('[ICE] using', ICE_SERVERS.length, 'configured servers');
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
         pcRef.current = pc;
 
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
