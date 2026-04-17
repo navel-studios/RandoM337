@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>STUN / TURN Server Tester</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 1rem; }
+  h1 { font-size: 1.2rem; margin-bottom: .5rem; color: #58a6ff; }
+  p.desc { font-size: .82rem; color: #8b949e; margin-bottom: 1rem; }
+  #controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+  button { padding: .4rem .9rem; border: none; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: .85rem; }
+  #btn-run  { background: #238636; color: #fff; }
+  #btn-stop { background: #b62324; color: #fff; display: none; }
+  #btn-copy { background: #30363d; color: #c9d1d9; }
+  label { font-size: .82rem; color: #8b949e; }
+  input[type=number] { width: 4rem; padding: .3rem .4rem; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace; }
+  #summary { font-size: .85rem; margin-bottom: .8rem; color: #8b949e; }
+  #summary b { color: #c9d1d9; }
+  table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  th { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #21262d; color: #58a6ff; font-weight: normal; }
+  td { padding: .3rem .5rem; border-bottom: 1px solid #161b22; vertical-align: middle; }
+  tr:hover td { background: #161b22; }
+  .status { display: inline-block; width: 7rem; padding: .15rem .4rem; border-radius: 3px; text-align: center; font-size: .75rem; }
+  .status-waiting  { background: #21262d; color: #8b949e; }
+  .status-testing  { background: #1f3a5c; color: #58a6ff; }
+  .status-ok       { background: #132d15; color: #3fb950; }
+  .status-fail     { background: #2d1a1a; color: #f85149; }
+  .status-timeout  { background: #2d2510; color: #d29922; }
+  .ctype { font-size: .75rem; }
+  .srflx { color: #3fb950; }
+  .host  { color: #8b949e; }
+  .relay { color: #d2a8ff; }
+  .ms   { color: #8b949e; font-size: .75rem; }
+  .ip   { color: #79c0ff; }
+  #log-area { margin-top: 1rem; }
+  #log-toggle { font-size: .78rem; color: #58a6ff; cursor: pointer; user-select: none; }
+  #log { display: none; margin-top: .5rem; background: #161b22; border: 1px solid #21262d;
+         padding: .5rem; border-radius: 4px; height: 12rem; overflow-y: auto; font-size: .75rem; color: #8b949e; }
+  #log .good { color: #3fb950; }
+  #log .bad  { color: #f85149; }
+  #log .info { color: #58a6ff; }
+  .progress { font-size: .8rem; color: #8b949e; margin-bottom: .5rem; }
+</style>
+</head>
+<body>
+
+<h1>STUN / TURN Server Tester</h1>
+<p class="desc">
+  Tests each ICE server by opening an <code>RTCPeerConnection</code> and checking which candidate
+  types it gathers (<span class="srflx">srflx</span> = STUN reached your public IP,
+  <span class="relay">relay</span> = TURN works, <span class="host">host</span> = LAN only).
+</p>
+
+<div id="controls">
+  <button id="btn-run" onclick="runAll()">▶ Run all tests</button>
+  <button id="btn-stop" onclick="stopAll()">■ Stop</button>
+  <button id="btn-copy" onclick="copyWorking()">Copy working servers</button>
+  <label>Timeout <input id="timeout" type="number" value="5" min="1" max="30" /> s</label>
+</div>
+
+<div id="summary"></div>
+<div class="progress" id="progress"></div>
+<table>
+  <thead><tr>
+    <th>#</th><th>URL</th><th>Status</th><th>Candidates</th><th>Public IP</th><th>RTT</th>
+  </tr></thead>
+  <tbody id="tbody"></tbody>
+</table>
+
+<div id="log-area">
+  <span id="log-toggle" onclick="toggleLog()">▸ Show raw log</span>
+  <div id="log"></div>
+</div>
+
+<script>
+// ─── Server list ──────────────────────────────────────────────────────────────
+// Add / remove servers here. TURN entries need username + credential fields.
+const SERVERS = [
+  // Google
+  'stun:stun.l.google.com:19302',
+  'stun:stun1.l.google.com:19302',
+  'stun:stun2.l.google.com:19302',
+  'stun:stun3.l.google.com:19302',
+  'stun:stun4.l.google.com:19302',
+  // Metered
+  'stun:stun.relay.metered.ca:80',
+  // Cloudflare
+  'stun:stun.cloudflare.com:3478',
+  // Twilio
+  'stun:global.stun.twilio.com:3478',
+  // Various public
+  'stun:stun.stunprotocol.org:3478',
+  'stun:stun.ekiga.net',
+  'stun:stun.ideasip.com',
+  'stun:stun.schlund.de',
+  'stun:stun.voiparound.com',
+  'stun:stun.voipbuster.com',
+  'stun:stun.voipstunt.com',
+  'stun:stun.voxgratia.org',
+  'stun:stun.sipgate.net:10000',
+  'stun:stun.counterpath.net',
+  'stun:stun.counterpath.com',
+  'stun:stun.gmx.net',
+  'stun:stun.ippi.fr',
+  'stun:stun.mit.de:3478',
+  'stun:stun.qq.com',
+  'stun:stun.xten.com',
+  'stun:stun.fwdnet.net',
+  'stun:stun.iptel.org',
+  'stun:stun.noc.ams-ix.net',
+  'stun:stun.phonepower.com',
+  'stun:stun.wtfismyip.com',
+  'stun:stun.nextcloud.com:443',
+  // Metered TURN (with credentials — edit these)
+  { urls: 'turn:global.relay.metered.ca:80',                 username: 'db35398d58c338b20c811fcd', credential: '3JE+pTC4CvGd1HbB' },
+  { urls: 'turn:global.relay.metered.ca:80?transport=tcp',   username: 'db35398d58c338b20c811fcd', credential: '3JE+pTC4CvGd1HbB' },
+  { urls: 'turn:global.relay.metered.ca:443',                username: 'db35398d58c338b20c811fcd', credential: '3JE+pTC4CvGd1HbB' },
+  { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'db35398d58c338b20c811fcd', credential: '3JE+pTC4CvGd1HbB' },
+];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let rows = [];
+let stopped = false;
+let activeConns = [];
+
+function buildTable() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  rows = SERVERS.map((srv, i) => {
+    const url = typeof srv === 'string' ? srv : srv.urls;
+    const isTurn = url.startsWith('turn') || url.startsWith('turns');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td>${url}${isTurn ? ' <small style="color:#d2a8ff">[TURN]</small>' : ''}</td>
+      <td><span id="s${i}" class="status status-waiting">waiting</span></td>
+      <td id="c${i}">—</td>
+      <td id="ip${i}">—</td>
+      <td id="rtt${i}">—</td>
+    `;
+    tbody.appendChild(tr);
+    return { url, srv, i };
+  });
+}
+
+function setStatus(i, cls, text) {
+  const el = document.getElementById('s' + i);
+  el.className = 'status ' + cls;
+  el.textContent = text;
+}
+
+function appendLog(msg, cls) {
+  const log = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = cls || '';
+  line.textContent = new Date().toISOString().slice(11, 23) + '  ' + msg;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ─── Test a single server ─────────────────────────────────────────────────────
+function testServer({ srv, i }) {
+  return new Promise((resolve) => {
+    if (stopped) { resolve({ i, result: 'stopped' }); return; }
+
+    const timeoutMs = (parseInt(document.getElementById('timeout').value, 10) || 5) * 1000;
+    const iceConfig = typeof srv === 'string'
+      ? [{ urls: srv }]
+      : [{ urls: srv.urls, username: srv.username, credential: srv.credential }];
+
+    const url = iceConfig[0].urls;
+    setStatus(i, 'status-testing', 'testing…');
+    appendLog(`[${i + 1}] Testing ${url}`, 'info');
+
+    const candidates = { host: [], srflx: [], relay: [] };
+    const startMs = Date.now();
+    let finished = false;
+    let publicIp = null;
+
+    let pc;
+    try {
+      pc = new RTCPeerConnection({ iceServers: iceConfig });
+    } catch (e) {
+      setStatus(i, 'status-fail', 'error');
+      appendLog(`[${i + 1}] RTCPeerConnection error: ${e.message}`, 'bad');
+      resolve({ i, result: 'error' });
+      return;
+    }
+    activeConns.push(pc);
+
+    pc.onicecandidate = (evt) => {
+      if (!evt.candidate) {
+        // gathering complete
+        finish('ok');
+        return;
+      }
+      const c = evt.candidate;
+      const type = c.type || 'host';
+      if (candidates[type]) candidates[type].push(c);
+      else candidates['host'].push(c);
+
+      if ((type === 'srflx' || type === 'relay') && c.address) {
+        publicIp = c.address;
+      }
+      appendLog(`[${i + 1}]  candidate ${type} ${c.address || ''} ${c.protocol || ''}`, type === 'relay' ? 'good' : '');
+    };
+
+    pc.onicegatheringstatechange = () => {
+      if (pc.iceGatheringState === 'complete') finish('ok');
+    };
+
+    // Create a dummy data channel to trigger ICE gathering
+    pc.createDataChannel('probe');
+    pc.createOffer().then(offer => pc.setLocalDescription(offer)).catch(e => {
+      appendLog(`[${i + 1}] createOffer error: ${e.message}`, 'bad');
+      finish('error');
+    });
+
+    const timer = setTimeout(() => finish('timeout'), timeoutMs);
+
+    function finish(result) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      const rtt = Date.now() - startMs;
+
+      // Remove from active list
+      activeConns = activeConns.filter(x => x !== pc);
+      try { pc.close(); } catch (_) {}
+
+      const hasSrflx = candidates.srflx.length > 0;
+      const hasRelay = candidates.relay.length > 0;
+      const hasAny   = hasSrflx || hasRelay || candidates.host.length > 0;
+
+      if (result === 'timeout') {
+        setStatus(i, 'status-timeout', 'timeout');
+        appendLog(`[${i + 1}] ✗ timeout after ${timeoutMs}ms`, 'bad');
+      } else if (result === 'error' || !hasAny) {
+        setStatus(i, 'status-fail', 'fail');
+        appendLog(`[${i + 1}] ✗ no candidates`, 'bad');
+      } else {
+        setStatus(i, 'status-ok', hasSrflx || hasRelay ? '✓ reachable' : 'host only');
+        appendLog(`[${i + 1}] ✓ ${url} srflx=${candidates.srflx.length} relay=${candidates.relay.length} host=${candidates.host.length}`, 'good');
+      }
+
+      // Candidate summary cell
+      const parts = [];
+      if (candidates.host.length)  parts.push(`<span class="ctype host">${candidates.host.length} host</span>`);
+      if (candidates.srflx.length) parts.push(`<span class="ctype srflx">${candidates.srflx.length} srflx</span>`);
+      if (candidates.relay.length) parts.push(`<span class="ctype relay">${candidates.relay.length} relay</span>`);
+      document.getElementById('c' + i).innerHTML = parts.join(' ') || '—';
+      document.getElementById('ip' + i).innerHTML = publicIp ? `<span class="ip">${publicIp}</span>` : '—';
+      document.getElementById('rtt' + i).innerHTML = `<span class="ms">${rtt}ms</span>`;
+
+      resolve({ i, result, hasSrflx, hasRelay, rtt });
+    }
+  });
+}
+
+// ─── Run all ──────────────────────────────────────────────────────────────────
+async function runAll() {
+  stopped = false;
+  document.getElementById('btn-run').style.display  = 'none';
+  document.getElementById('btn-stop').style.display = 'inline-block';
+  document.getElementById('summary').innerHTML = '';
+  document.getElementById('progress').textContent = '';
+  buildTable();
+  appendLog('=== Test run started ===', 'info');
+
+  const CONCURRENCY = 5;
+  const results = new Array(rows.length);
+  let completed = 0;
+
+  // Run in chunks so we don't open 30 PeerConnections at once
+  for (let start = 0; start < rows.length; start += CONCURRENCY) {
+    if (stopped) break;
+    const batch = rows.slice(start, start + CONCURRENCY);
+    const batchResults = await Promise.all(batch.map(r => testServer(r)));
+    batchResults.forEach(r => { results[r.i] = r; });
+    completed += batch.length;
+    document.getElementById('progress').textContent =
+      `Testing… ${Math.min(completed, rows.length)} / ${rows.length}`;
+  }
+
+  document.getElementById('btn-run').style.display  = 'inline-block';
+  document.getElementById('btn-stop').style.display = 'none';
+  document.getElementById('progress').textContent   = '';
+
+  // Summary
+  const valid = results.filter(r => r && (r.hasSrflx || r.hasRelay));
+  const srflxOnly = results.filter(r => r && r.hasSrflx && !r.hasRelay);
+  const relayOnly = results.filter(r => r && r.hasRelay);
+  const failed  = results.filter(r => r && r.result !== 'ok' && !r.hasSrflx && !r.hasRelay);
+  document.getElementById('summary').innerHTML =
+    `<b>${valid.length}</b> reachable &nbsp;|&nbsp; ` +
+    `<b>${srflxOnly.length}</b> STUN (srflx) &nbsp;|&nbsp; ` +
+    `<b>${relayOnly.length}</b> TURN (relay) &nbsp;|&nbsp; ` +
+    `<b>${failed.length}</b> failed/timeout &nbsp;&nbsp; ` +
+    `<span style="color:#8b949e">of ${rows.length} tested</span>`;
+  appendLog(`=== Done: ${valid.length}/${rows.length} reachable ===`, 'info');
+}
+
+function stopAll() {
+  stopped = true;
+  activeConns.forEach(pc => { try { pc.close(); } catch (_) {} });
+  activeConns = [];
+  document.getElementById('btn-run').style.display  = 'inline-block';
+  document.getElementById('btn-stop').style.display = 'none';
+  document.getElementById('progress').textContent   = 'Stopped.';
+}
+
+function copyWorking() {
+  const lines = [];
+  rows.forEach(({ url, srv }, i) => {
+    const s = document.getElementById('s' + i).textContent;
+    if (s.includes('✓')) {
+      if (typeof srv === 'string') {
+        lines.push(`{ urls: '${url}' }`);
+      } else {
+        lines.push(`{ urls: '${srv.urls}', username: '${srv.username}', credential: '${srv.credential}' }`);
+      }
+    }
+  });
+  if (!lines.length) { alert('No working servers found yet — run the test first.'); return; }
+  navigator.clipboard.writeText(lines.join(',\n')).then(
+    () => alert(`Copied ${lines.length} working server(s) to clipboard.`),
+    () => alert(lines.join(',\n'))
+  );
+}
+
+function toggleLog() {
+  const log = document.getElementById('log');
+  const tog = document.getElementById('log-toggle');
+  if (log.style.display === 'block') {
+    log.style.display = 'none';
+    tog.textContent = '▸ Show raw log';
+  } else {
+    log.style.display = 'block';
+    tog.textContent = '▾ Hide raw log';
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+// Init table on load
+buildTable();
+</script>
+</body>
+</html>
